@@ -22,7 +22,8 @@ executable java-bytecode
   other-modules:       Types,
                        Helper,
                        ConstantPool,
-                       Components
+                       ClassFile,
+                       Method
   -- other-extensions:
   build-depends:       base >=4.12 && <4.13,
                        bytestring,

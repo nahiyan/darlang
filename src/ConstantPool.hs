@@ -4,90 +4,139 @@ import Data.Binary.Put (Put, runPut, putWord8, putWord16be, putStringUtf8)
 import Data.Word (Word16)
 import Data.List as List
 import Data.List.Split (splitOn)
+import Control.Monad (when)
 
-import Types (Component)
+import Types
 import Helper (intToWord16)
 
 
-constantPoolSize' :: Component -> Word16
-constantPoolSize' ( a, _ ) =
+sizeBC :: Word16 -> Put
+sizeBC =
+    putWord16be
+
+
+size :: [ Component ] -> Word16
+size constantPool =
+    List.foldl
+        (+)
+        1
+        (List.map size' constantPool)
+
+
+size' :: Component -> Word16
+size' ( a, _ ) =
     case a of
-        "class" ->
+        "class_ref" ->
             2
 
-        "string" ->
+        "string_ref" ->
             2
 
-        "field" ->
+        "field_ref" ->
             4
+
+        "method_ref" ->
+            4
+
+        "utf8" ->
+            1
 
         "method" ->
-            4
+            3
 
         _ ->
             0
 
 
-constantPoolSize :: [ Component ] -> Word16
-constantPoolSize constantPool =
-    List.foldl
-        (+)
-        1
-        (List.map constantPoolSize' constantPool)
-
-
-constantPoolItemsBefore :: [ Component ] -> Int -> Word16
-constantPoolItemsBefore constantPool index =
+model :: [ Component ] -> CPModel
+model components =
     let
-        constantPoolTrimmed =
-            List.take (index - 1) constantPool
+        initModel =
+            CPModel
+                { bytecode = return ()
+                , methodsInfo = []
+                , components = components
+                }
     in
-    List.sum $ List.map constantPoolSize' constantPoolTrimmed
+    model' 1 components initModel
 
 
-generateConstantPoolWords' :: Word16 -> Component -> [ Component ] -> Put
-generateConstantPoolWords' index ( a, b ) constantPool =
-    case a of
-        "class" ->
-            classNameWords index b
-
-        "string" ->
-            stringWords index b
-
-        "field" ->
-            fieldWords index b constantPool
-
-        "method" ->
-            methodWords index b constantPool
-
-        _ ->
-            putWord8 0
-
-
-generateConstantPoolWords :: Word16 -> [ Component ] -> [ Put ] -> [ Component ] -> Put
-generateConstantPoolWords index items words constantPool =
+model' :: Word16 -> [ Component ] -> CPModel -> CPModel
+model' index items model =
     if null items then
-        List.foldl1 (>>) words
+        model
     else
         let
             currentItem =
                 List.head items
 
-            counterNew =
-                index + constantPoolSize' currentItem
+            indexNew =
+                index + size' currentItem
 
             itemsNew =
                 List.tail items
 
-            wordsNew =
-                words
-                    ++ [ generateConstantPoolWords' index currentItem constantPool ]
+            modelNew =
+                model'' index currentItem model
         in
-        generateConstantPoolWords counterNew itemsNew wordsNew constantPool
+        model' indexNew itemsNew modelNew
 
 
-classNameWords :: Word16 -> String -> Put
-classNameWords index name = do
+model'' :: Word16 -> Component -> CPModel -> CPModel
+model'' index ( a, b ) model =
+    let
+        oldBytecode =
+            Types.bytecode model
+
+        oldMethodsInfo =
+            Types.methodsInfo model
+    in
+    case a of
+        "class_ref" ->
+            model
+                { bytecode = oldBytecode >> classRefBC index b }
+
+        "string_ref" ->
+            model
+                { bytecode = oldBytecode >> stringRefBC index b }
+
+        "field_ref" ->
+            model
+                { bytecode = oldBytecode >> fieldRefBC index b (components model) }
+
+        "method_ref" ->
+            model
+                { bytecode = oldBytecode >> methodRefBC index b (components model) }
+
+        "utf8" ->
+            model
+                { bytecode = oldBytecode >> utf8BC b }
+
+        "method" ->
+            let
+                result =
+                    methodBC index b
+            in
+            model
+                { bytecode = oldBytecode >> fst result
+                , methodsInfo = oldMethodsInfo ++ snd result
+                }
+
+        _ ->
+            model
+
+
+itemsBefore :: [ Component ] -> Int -> Word16
+itemsBefore constantPool index =
+    let
+        constantPoolTrimmed =
+            List.take (index - 1) constantPool
+    in
+    List.sum $ List.map size' constantPoolTrimmed
+
+
+classRefBC :: Word16 -> String -> Put
+classRefBC index name = do
     putWord8 7
     putWord16be $ index + 1
 
@@ -97,33 +146,33 @@ classNameWords index name = do
     putStringUtf8 name
 
 
-utf8Words :: String -> Put
-utf8Words contents = do
+utf8BC :: String -> Put
+utf8BC contents = do
     putWord8 1
     putWord16be $ intToWord16 $ Prelude.length contents
     putStringUtf8 contents
 
 
-stringWords :: Word16 -> String -> Put
-stringWords index contents = do
+stringRefBC :: Word16 -> String -> Put
+stringRefBC index contents = do
     putWord8 8
     putWord16be $ index + 1
-    utf8Words contents
+    utf8BC contents
 
 
-fieldWords :: Word16 -> String -> [ Component ] -> Put
-fieldWords index contents constantPool =
+fieldOrMethodRefBC :: Word16 -> String -> [ Component ] -> String -> Put
+fieldOrMethodRefBC index contents constantPool refType =
     let
         segments =
             splitOn ":" contents
     in
-    if List.length segments == 3 then
+    when (List.length segments == 3) $
         let
             parentClassCPIndex =
                 read (List.head segments) :: Int
 
             parentClassIndex =
-                (constantPoolItemsBefore constantPool parentClassCPIndex) + 1
+                itemsBefore constantPool parentClassCPIndex + 1
 
             name =
                 segments !! 1
@@ -132,52 +181,36 @@ fieldWords index contents constantPool =
                 segments !! 2
         in
         do
-            putWord8 9
+            case refType of
+                "field" ->
+                    putWord8 9
+
+                _ ->
+                    putWord8 10
+
             putWord16be parentClassIndex
             putWord16be $ index + 1
 
-            nameAndTypeWords (index + 1) (name ++ ":" ++ type_)
-    else
-        return ()
+            nameAndTypeBC (index + 1) (name ++ ":" ++ type_)
 
 
-methodWords :: Word16 -> String -> [ Component ] -> Put
-methodWords index contents constantPool =
+fieldRefBC :: Word16 -> String -> [ Component ] -> Put
+fieldRefBC index contents constantPool =
+    fieldOrMethodRefBC index contents constantPool "field"
+
+
+methodRefBC :: Word16 -> String -> [ Component ] -> Put
+methodRefBC index contents constantPool =
+    fieldOrMethodRefBC index contents constantPool "method"
+
+
+nameAndTypeBC :: Word16 -> String -> Put
+nameAndTypeBC index contents =
     let
         segments =
             splitOn ":" contents
     in
-    if List.length segments == 3 then
-        let
-            parentClassCPIndex =
-                read (List.head segments) :: Int
-
-            parentClassIndex =
-                (constantPoolItemsBefore constantPool parentClassCPIndex) + 1
-
-            name =
-                segments !! 1
-
-            type_ =
-                segments !! 2
-        in
-        do
-            putWord8 10
-            putWord16be parentClassIndex
-            putWord16be $ index + 1
-
-            nameAndTypeWords (index + 1) (name ++ ":" ++ type_)
-    else
-        return ()
-
-
-nameAndTypeWords :: Word16 -> String -> Put
-nameAndTypeWords index contents =
-    let
-        segments =
-            splitOn ":" contents
-    in
-    if List.length segments == 2 then
+    when (List.length segments == 2) $
         let
             name =
                 List.head segments
@@ -189,7 +222,33 @@ nameAndTypeWords index contents =
             putWord8 12
             putWord16be $ index + 1
             putWord16be $ index + 2
-            utf8Words name
-            utf8Words type_
-    else
-        return ()
+            utf8BC name
+            utf8BC type_
+
+
+-- methodBC :: Word16 -> String -> ( Put, [ MethodInfo ] )
+-- methodBC index contents =
+--     let
+--         segments =
+--             splitOn ":" contents
+--     in
+--     if List.length segments == 2 then
+--         let
+--             name =
+--                 List.head segments
+
+--             type_ =
+--                 segments !! 1
+
+--             bytecode_ = do
+--                 utf8BC name
+--                 utf8BC type_
+--                 utf8BC "Code"
+
+--             methodInfo =
+--                 index
+--         in
+--         ( bytecode_, [ methodInfo ] )
+
+--     else
+--         ( return (), [] )
