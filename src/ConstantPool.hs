@@ -15,135 +15,194 @@ sizeBC =
     putWord16be
 
 
-size :: [ Component ] -> Word16
-size constantPool =
-    List.foldl
-        (+)
-        1
-        (List.map size' constantPool)
-
-
-size' :: Component -> Word16
-size' ( a, _ ) =
-    case a of
-        "class_ref" ->
-            2
-
-        "string_ref" ->
-            2
-
-        "field_ref" ->
-            4
-
-        "method_ref" ->
-            4
-
-        "utf8" ->
-            1
-
-        "method" ->
-            3
-
-        _ ->
-            0
-
-
-model :: [ Component ] -> CPModel
-model components =
+process :: Model -> Model
+process model =
     let
-        initModel =
-            CPModel
-                { bytecode = return ()
-                , methodsInfo = []
-                , components = components
+        constantPool =
+            Types.constantPool model
+
+        modelNew =
+            model
+                { constantPoolBC =
+                    putWord16be
+                        (intToWord16
+                            (List.length
+                                (Types.constantPool model) + 1
+                            )
+                        )
                 }
     in
-    model' 1 components initModel
+    process' modelNew constantPool
 
 
-model' :: Word16 -> [ Component ] -> CPModel -> CPModel
-model' index items model =
-    if null items then
+-- loop through items in the constant pool
+
+process' :: Model -> Types.ConstantPool -> Model
+process' model constantPool =
+    if null constantPool then
         model
     else
         let
             currentItem =
-                List.head items
-
-            indexNew =
-                index + size' currentItem
-
-            itemsNew =
-                List.tail items
+                List.head constantPool
 
             modelNew =
-                model'' index currentItem model
+                process'' model currentItem
+
+            constantPoolNew =
+                List.tail constantPool :: Types.ConstantPool
         in
-        model' indexNew itemsNew modelNew
+        process' modelNew constantPoolNew
 
 
-model'' :: Word16 -> Component -> CPModel -> CPModel
-model'' index ( a, b ) model =
+process'' :: Model -> ( String, String ) -> Model
+process'' model ( type_, contents ) =
     let
-        oldBytecode =
-            Types.bytecode model
+        bytecode =
+            case type_ of
+                "utf8" ->
+                    utf8BC contents
 
-        oldMethodsInfo =
-            Types.methodsInfo model
+                "name_and_type" ->
+                    nameAndTypeBC contents
+
+                "class_ref" ->
+                    classRefBC contents
+
+                "field_ref" ->
+                    fieldRefBC contents
+
+                "method_ref" ->
+                    methodRefBC contents
+
+                "string_ref" ->
+                    stringRefBC contents
+
+                _ ->
+                    return ()
     in
-    case a of
-        "class_ref" ->
-            model
-                { bytecode = oldBytecode >> classRefBC index b }
-
-        "string_ref" ->
-            model
-                { bytecode = oldBytecode >> stringRefBC index b }
-
-        "field_ref" ->
-            model
-                { bytecode = oldBytecode >> fieldRefBC index b (components model) }
-
-        "method_ref" ->
-            model
-                { bytecode = oldBytecode >> methodRefBC index b (components model) }
-
-        "utf8" ->
-            model
-                { bytecode = oldBytecode >> utf8BC b }
-
-        "method" ->
-            let
-                result =
-                    methodBC index b
-            in
-            model
-                { bytecode = oldBytecode >> fst result
-                , methodsInfo = oldMethodsInfo ++ snd result
-                }
-
-        _ ->
-            model
+    model
+        { constantPoolBC =
+            Types.constantPoolBC model
+                >> bytecode
+        }
 
 
-itemsBefore :: [ Component ] -> Int -> Word16
-itemsBefore constantPool index =
+addCPItem :: Types.ConstantPool -> Types.ConstantPool -> ( Types.ConstantPool, [ Word16 ] )
+addCPItem constantPool newItems =
     let
-        constantPoolTrimmed =
-            List.take (index - 1) constantPool
+        constantPoolNew =
+            constantPool ++ newItems
+
+        indexes =
+            List.map
+                intToWord16
+                [ (List.length constantPool + 1)..(List.length constantPoolNew) ]
     in
-    List.sum $ List.map size' constantPoolTrimmed
+    ( constantPoolNew, indexes )
 
 
-classRefBC :: Word16 -> String -> Put
-classRefBC index name = do
-    putWord8 7
-    putWord16be $ index + 1
+addClassRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addClassRef name constantPool =
+    let
+        ( constantPoolNew, indexes ) =
+            addCPItem
+                constantPool
+                [ ( "utf8", name ) ]
 
-    putWord8 1
-    putWord16be $ intToWord16 $ Prelude.length name
+        ( constantPoolNew2, indexes2 ) =
+            addCPItem
+                constantPoolNew
+                [ ( "class_ref", show $ List.head indexes ) ]
+    in
+    ( constantPoolNew2, indexes2 ++ indexes )
 
-    putStringUtf8 name
+
+addStringRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addStringRef name constantPool =
+    let
+        ( constantPoolNew, indexes ) =
+            addCPItem
+                constantPool
+                [ ( "utf8", name ) ]
+
+        ( constantPoolNew2, indexes2 ) =
+            addCPItem
+                constantPoolNew
+                [ ( "string_ref", show $ List.head indexes ) ]
+    in
+    ( constantPoolNew2, indexes2 ++ indexes )
+
+
+addFieldOrMethodRef :: [ String ] -> ConstantPool -> String -> ( ConstantPool, [ Word16 ])
+addFieldOrMethodRef segments constantPool refType =
+    if List.length segments == 3 then
+        let
+            ( constantPoolNew, indexes ) =
+                addCPItem
+                    constantPool
+                    [ ( "utf8", segments !! 1 )
+                    , ( "utf8", segments !! 2 )
+                    ]
+
+            ( constantPoolNew2, indexes2 ) =
+                addClassRef
+                    (List.head segments)
+                    constantPoolNew
+
+            ( constantPoolNew3, indexes3 ) =
+                addNameAndType
+                    (segments !! 1)
+                    (segments !! 2)
+                    constantPoolNew2
+
+            indexesStringified =
+                show (List.head indexes2)
+                    ++ ":"
+                    ++ show (List.head indexes3)
+
+            ( constantPoolNew4, indexes4 ) =
+                addCPItem
+                    constantPoolNew3
+                    [ ( refType ++ "_ref", indexesStringified ) ]
+
+        in
+        ( constantPoolNew4, indexes4 ++ indexes3 ++ indexes2 ++ indexes )
+    else
+        ( constantPool, [] )
+
+
+addFieldRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addFieldRef segments constantPool =
+    addFieldOrMethodRef segments constantPool "field"
+
+
+addMethodRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addMethodRef segments constantPool =
+    addFieldOrMethodRef segments constantPool "method"
+
+
+addNameAndType :: String -> String -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addNameAndType name type_ constantPool =
+    let
+        ( constantPoolNew, indexes ) =
+            addCPItem
+                constantPool
+                [ ( "utf8", name )
+                , ( "utf8", type_)
+                ]
+
+        indexesStringified =
+            show (List.head indexes)
+                ++ ":"
+                ++ show (indexes !! 1)
+
+        ( constantPoolNew2, indexes2 ) =
+            addCPItem
+                constantPoolNew
+                [ ( "name_and_type", indexesStringified ) ]
+    in
+    ( constantPoolNew2, indexes2 ++ indexes )
 
 
 utf8BC :: String -> Put
@@ -153,32 +212,41 @@ utf8BC contents = do
     putStringUtf8 contents
 
 
-stringRefBC :: Word16 -> String -> Put
-stringRefBC index contents = do
-    putWord8 8
-    putWord16be $ index + 1
-    utf8BC contents
+classRefBC :: String -> Put
+classRefBC contents =
+    let
+        index =
+            read contents :: Word16
+    in
+    do
+        putWord8 7
+        putWord16be index
 
 
-fieldOrMethodRefBC :: Word16 -> String -> [ Component ] -> String -> Put
-fieldOrMethodRefBC index contents constantPool refType =
+stringRefBC :: String -> Put
+stringRefBC contents =
+    let
+        index =
+            read contents :: Word16
+    in
+    do
+        putWord8 8
+        putWord16be index
+
+
+fieldOrMethodRefBC :: String -> String -> Put
+fieldOrMethodRefBC contents refType =
     let
         segments =
             splitOn ":" contents
     in
-    when (List.length segments == 3) $
+    when (List.length segments == 2) $
         let
-            parentClassCPIndex =
-                read (List.head segments) :: Int
+            index1 =
+                read (List.head segments) :: Word16
 
-            parentClassIndex =
-                itemsBefore constantPool parentClassCPIndex + 1
-
-            name =
-                segments !! 1
-
-            type_ =
-                segments !! 2
+            index2 =
+                read (segments !! 1) :: Word16
         in
         do
             case refType of
@@ -188,67 +256,34 @@ fieldOrMethodRefBC index contents constantPool refType =
                 _ ->
                     putWord8 10
 
-            putWord16be parentClassIndex
-            putWord16be $ index + 1
-
-            nameAndTypeBC (index + 1) (name ++ ":" ++ type_)
+            putWord16be index1
+            putWord16be index2
 
 
-fieldRefBC :: Word16 -> String -> [ Component ] -> Put
-fieldRefBC index contents constantPool =
-    fieldOrMethodRefBC index contents constantPool "field"
+fieldRefBC :: String -> Put
+fieldRefBC contents =
+    fieldOrMethodRefBC contents "field"
 
 
-methodRefBC :: Word16 -> String -> [ Component ] -> Put
-methodRefBC index contents constantPool =
-    fieldOrMethodRefBC index contents constantPool "method"
+methodRefBC :: String -> Put
+methodRefBC contents =
+    fieldOrMethodRefBC contents "method"
 
 
-nameAndTypeBC :: Word16 -> String -> Put
-nameAndTypeBC index contents =
+nameAndTypeBC :: String -> Put
+nameAndTypeBC contents =
     let
         segments =
             splitOn ":" contents
+
+        index1 =
+            read (List.head segments) :: Word16
+
+        index2 =
+            read (segments !! 1) :: Word16
     in
     when (List.length segments == 2) $
-        let
-            name =
-                List.head segments
-
-            type_ =
-                segments !! 1
-        in
         do
             putWord8 12
-            putWord16be $ index + 1
-            putWord16be $ index + 2
-            utf8BC name
-            utf8BC type_
-
-
--- methodBC :: Word16 -> String -> ( Put, [ MethodInfo ] )
--- methodBC index contents =
---     let
---         segments =
---             splitOn ":" contents
---     in
---     if List.length segments == 2 then
---         let
---             name =
---                 List.head segments
-
---             type_ =
---                 segments !! 1
-
---             bytecode_ = do
---                 utf8BC name
---                 utf8BC type_
---                 utf8BC "Code"
-
---             methodInfo =
---                 index
---         in
---         ( bytecode_, [ methodInfo ] )
-
---     else
---         ( return (), [] )
+            putWord16be index1
+            putWord16be index2

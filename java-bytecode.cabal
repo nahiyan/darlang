@@ -23,7 +23,8 @@ executable java-bytecode
                        Helper,
                        ConstantPool,
                        ClassFile,
-                       Method
+                       Method,
+                       Class
   -- other-extensions:
   build-depends:       base >=4.12 && <4.13,
                        bytestring,

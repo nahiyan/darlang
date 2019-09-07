@@ -9,7 +9,8 @@ import Data.List as List
 import Helper (intToWord16)
 import ConstantPool as CP
 import Types (Model(..), Class(..), Method(..))
-import Method (sizeBC, bytecode)
+import Method (sizeBC, process)
+import Class (process)
 
 
 bytecode :: Types.Class -> BS.ByteString
@@ -17,7 +18,12 @@ bytecode class_ =
     let
         initModel =
             Model
-                { constantPool = [] }
+                { constantPool = []
+                , constantPoolBC = return ()
+                , methodsBC = return ()
+                }
+
+        -- counters
 
         interfacesCount = 0
 
@@ -28,14 +34,25 @@ bytecode class_ =
 
         attributesCount = 0
 
+        -- process class
+
+        processClassModel =
+            Class.process
+                class_
+                initModel
+
+        -- process methods
+
         processedMethodsModel =
             Method.process
                 (Types.methods class_)
-                initModel
+                processClassModel
+
+        -- process constant pool
 
         processedConstantPoolModel =
             CP.process
-                processedMethods
+                processedMethodsModel
 
         constantPoolRelatedBC =
             Types.constantPoolBC processedConstantPoolModel
@@ -70,13 +87,13 @@ bytecode class_ =
             putWord8 186    -- ba
             putWord8 190    -- be
 
-        minorVersionBC = do
+        minorVersionBC =
             putWord16be 0
 
-        majorVersionBC = do
+        majorVersionBC =
             putWord16be 52
 
-        accessFlagsBC = do
+        accessFlagsBC =
             putWord16be 33
 
         thisClassBC =
@@ -85,19 +102,19 @@ bytecode class_ =
         superClassBC =
             putWord16be 3
 
-        interfacesCountBC = do
+        interfacesCountBC =
             putWord16be 0
 
         interfacesBC =
             return ()
 
-        fieldsCountBC = do
+        fieldsCountBC =
             putWord16be 0
 
         fieldsBC =
             return ()
 
-        attributesCountBC = do
+        attributesCountBC =
             putWord16be 0
 
         attributesBC =
@@ -126,7 +143,7 @@ writeClassFile class_ =
             ClassFile.bytecode class_
 
         className_ =
-            Types.className class_
+            Types.className class_ ++ ".class"
     in
     BS.writeFile className_ contents
         >> Prelude.putStrLn "File Written"

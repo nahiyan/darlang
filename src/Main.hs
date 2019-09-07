@@ -3,6 +3,8 @@ module Main where
 import Data.ByteString.Lazy as BS
 import ClassFile (writeClassFile)
 
+import Types (Class(..), Method(..))
+
 main :: IO ()
 main =
     let
@@ -14,9 +16,10 @@ main =
                 , maxStackSize = 2
                 , maxLocalVarSize = 1
                 , code =
-                    [ ( "getstatic", "java/lang/System:out:Ljava/io/PrintStream" )
+                    [ ( "getstatic", "java/lang/System:out:Ljava/io/PrintStream;" )
                     , ( "ldc", "Hello World!" )
-                    , ( "invokevirtual", "java/io/PrintStream:printLn:(Ljava/lang/String;)V")
+                    , ( "invokevirtual", "java/io/PrintStream:println:(Ljava/lang/String;)V")
+                    , ( "return", "" )
                     ]
                 }
             ]
@@ -26,16 +29,5 @@ main =
                 { className = "HelloWorld"
                 , methods = methods_
                 }
-
-        -- components =
-        --     [ ( "class_ref", "HelloWorld" )
-        --     , ( "class_ref", "java/lang/Object" )
-        --     , ( "class_ref", "java/lang/System" )               -- 3
-        --     , ( "class_ref", "java/io/PrintStream" )            -- 4
-        --     , ( "string_ref", "Hello World" )
-        --     , ( "field_ref", "3:out:Ljava/io/PrintStream;" )
-        --     , ( "method_ref", "4:println:(Ljava/lang/String;)V" )
-        --     , ( "method", "main:([Ljava/lang/String;)V" )
-        --     ]
     in
-    writeClassFile "Test" class_
+    writeClassFile class_

@@ -8,7 +8,10 @@ data Method =
     Method
         { methodName        :: String
         , accessType        :: String
-        , descriptor        :: [ String ]
+        , descriptor        :: String
+        , maxStackSize      :: Word16
+        , maxLocalVarSize   :: Word16
+        , code              :: [ Instruction ]
         }
 
 
@@ -25,3 +28,11 @@ data Model =
         , constantPoolBC    :: Put
         , methodsBC         :: Put
         }
+
+
+type Instruction =
+    ( String, String )
+
+
+type ConstantPool =
+    [ ( String, String ) ]

@@ -1,5 +1,5 @@
 CHANGELOG.md
 java
 dist
-Test.class
+*.class
 Setup.hs
