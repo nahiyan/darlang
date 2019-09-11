@@ -33,6 +33,9 @@ data Model =
 type Instruction =
     ( String, String )
 
+type CPItem =
+    ( String, String )
+
 
 type ConstantPool =
     [ ( String, String ) ]

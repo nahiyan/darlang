@@ -5,6 +5,7 @@ import Data.Word (Word16)
 import Data.List as List
 import Data.List.Split (splitOn)
 import Control.Monad (when)
+import Debug.Trace (trace)
 
 import Types
 import Helper (intToWord16)
@@ -37,7 +38,7 @@ process model =
 
 -- loop through items in the constant pool
 
-process' :: Model -> Types.ConstantPool -> Model
+process' :: Model -> ConstantPool -> Model
 process' model constantPool =
     if null constantPool then
         model
@@ -50,12 +51,12 @@ process' model constantPool =
                 process'' model currentItem
 
             constantPoolNew =
-                List.tail constantPool :: Types.ConstantPool
+                List.tail constantPool
         in
         process' modelNew constantPoolNew
 
 
-process'' :: Model -> ( String, String ) -> Model
+process'' :: Model -> CPItem -> Model
 process'' model ( type_, contents ) =
     let
         bytecode =
@@ -88,121 +89,123 @@ process'' model ( type_, contents ) =
         }
 
 
-addCPItem :: Types.ConstantPool -> Types.ConstantPool -> ( Types.ConstantPool, [ Word16 ] )
-addCPItem constantPool newItems =
+addCPItem :: ConstantPool -> CPItem -> ( ConstantPool, Word16 )
+addCPItem constantPool item =
     let
         constantPoolNew =
-            constantPool ++ newItems
+            constantPool ++ [ item ]
 
-        indexes =
-            List.map
-                intToWord16
-                [ (List.length constantPool + 1)..(List.length constantPoolNew) ]
+        index =
+            intToWord16 $ List.length constantPoolNew
     in
-    ( constantPoolNew, indexes )
+    ( constantPoolNew, index )
 
 
-addClassRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ] )
-addClassRef name constantPool =
-    let
-        ( constantPoolNew, indexes ) =
-            addCPItem
-                constantPool
-                [ ( "utf8", name ) ]
+addCPItems' :: ConstantPool -> ConstantPool -> [ Word16 ] -> [ Word16 ] -> ( ConstantPool, [ Word16 ] )
+addCPItems' constantPool items indexes stack =
+    if null items then
+        ( constantPool, indexes )
+    else
+        let
+            (currentItem:restOfItems) =
+                items
 
-        ( constantPoolNew2, indexes2 ) =
-            addCPItem
-                constantPoolNew
-                [ ( "class_ref", show $ List.head indexes ) ]
-    in
-    ( constantPoolNew2, indexes2 ++ indexes )
+            contents
+                | snd currentItem == "%x" && not (null stack) =
+                  show $ List.last stack
+                | snd currentItem == "%x:%x" && List.length stack >= 2 =
+                  let lastTwoItems = List.take 2 $ List.reverse stack
+                      a = show $ List.head lastTwoItems
+                      b = show $ lastTwoItems !! 1
+                    in a ++ ":" ++ b
+                | otherwise = snd currentItem
+
+            currentItemNew =
+                ( fst currentItem, contents )
+
+            stackNew
+                | snd currentItem == "%x" && not (null stack) =
+                    List.take (List.length stack - 1) stack
+                | snd currentItem == "%x:%x" && List.length stack >= 2 =
+                    List.take (List.length stack - 2) stack
+                | otherwise = stack
+
+                -- if snd currentItem == "%x" && not (null stack) then
+                --     List.take (List.length stack - 1) stack
+                -- else if snd currentItem == "%x:%x" && List.length stack >= 2 then
+                --     List.take (List.length stack - 2) stack
+                -- else
+                --     stack
+
+            ( constantPoolNew, index ) =
+                addCPItem constantPool currentItemNew
+
+            stackNew2 =
+                stackNew ++ [ index ]
+
+            indexesNew =
+                indexes ++ [ index ]
+        in
+        addCPItems' constantPoolNew restOfItems indexesNew stackNew2
 
 
-addStringRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ] )
-addStringRef name constantPool =
-    let
-        ( constantPoolNew, indexes ) =
-            addCPItem
-                constantPool
-                [ ( "utf8", name ) ]
-
-        ( constantPoolNew2, indexes2 ) =
-            addCPItem
-                constantPoolNew
-                [ ( "string_ref", show $ List.head indexes ) ]
-    in
-    ( constantPoolNew2, indexes2 ++ indexes )
+addCPItems :: ConstantPool -> ConstantPool -> ( ConstantPool, [ Word16 ] )
+addCPItems constantPool newItems =
+    addCPItems' constantPool newItems [] []
 
 
-addFieldOrMethodRef :: [ String ] -> ConstantPool -> String -> ( ConstantPool, [ Word16 ] )
-addFieldOrMethodRef segments constantPool refType =
+classRef :: String -> ConstantPool
+classRef name =
+    [ ( "utf8", name )
+    , ( "class_ref", "%x" )
+    ]
+
+
+stringRef :: String -> ConstantPool
+stringRef name =
+    [ ( "utf8", name )
+    , ( "string_ref", "%x" )
+    ]
+
+
+fieldOrMethodRef :: [ String ] -> String -> ConstantPool
+fieldOrMethodRef segments refType =
     if List.length segments == 3 then
         let
-            ( constantPoolNew, indexes ) =
-                addCPItem
-                    constantPool
-                    [ ( "utf8", segments !! 1 )
-                    , ( "utf8", segments !! 2 )
-                    ]
+            classRef_ =
+                classRef (List.head segments)
 
-            ( constantPoolNew2, indexes2 ) =
-                addClassRef
-                    (List.head segments)
-                    constantPoolNew
-
-            ( constantPoolNew3, indexes3 ) =
-                addNameAndType
+            nameAndType_ =
+                nameAndType
                     (segments !! 1)
                     (segments !! 2)
-                    constantPoolNew2
 
-            indexesStringified =
-                show (List.head indexes2)
-                    ++ ":"
-                    ++ show (List.head indexes3)
-
-            ( constantPoolNew4, indexes4 ) =
-                addCPItem
-                    constantPoolNew3
-                    [ ( refType ++ "_ref", indexesStringified ) ]
-
+            fieldOrMethodRef_ =
+                [ ( refType ++ "_ref", "%x:%x" ) ]
         in
-        ( constantPoolNew4, indexes4 ++ indexes3 ++ indexes2 ++ indexes )
+        nameAndType_
+            ++ classRef_
+            ++ fieldOrMethodRef_
     else
-        ( constantPool, [] )
+        []
 
 
-addFieldRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ] )
-addFieldRef segments constantPool =
-    addFieldOrMethodRef segments constantPool "field"
+fieldRef :: [ String ] -> ConstantPool
+fieldRef segments =
+    fieldOrMethodRef segments "field"
 
 
-addMethodRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ] )
-addMethodRef segments constantPool =
-    addFieldOrMethodRef segments constantPool "method"
+methodRef :: [ String ] -> ConstantPool
+methodRef segments =
+    fieldOrMethodRef segments "method"
 
 
-addNameAndType :: String -> String -> ConstantPool -> ( ConstantPool, [ Word16 ] )
-addNameAndType name type_ constantPool =
-    let
-        ( constantPoolNew, indexes ) =
-            addCPItem
-                constantPool
-                [ ( "utf8", name )
-                , ( "utf8", type_)
-                ]
-
-        indexesStringified =
-            show (List.head indexes)
-                ++ ":"
-                ++ show (indexes !! 1)
-
-        ( constantPoolNew2, indexes2 ) =
-            addCPItem
-                constantPoolNew
-                [ ( "name_and_type", indexesStringified ) ]
-    in
-    ( constantPoolNew2, indexes2 ++ indexes )
+nameAndType :: String -> String -> ConstantPool
+nameAndType name type_ =
+    [ ( "utf8", type_)
+    , ( "utf8", name )
+    , ( "name_and_type", "%x:%x" )
+    ]
 
 
 utf8BC :: String -> Put
@@ -287,14 +290,3 @@ nameAndTypeBC contents =
             putWord8 12
             putWord16be index1
             putWord16be index2
-
-
-combineCPAndIndexes :: [ ( ConstantPool, [ Word16 ] ) ] -> ( ConstantPool, [ Word16 ] )
-combineCPAndIndexes (x:xs) =
-    List.foldl
-        (\a ->
-            \b ->
-                ( fst a ++ fst b, snd a ++ snd b )
-        )
-        x
-        xs

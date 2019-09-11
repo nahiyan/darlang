@@ -11,6 +11,7 @@ import ConstantPool as CP
 import Types (Model(..), Class(..), Method(..))
 import Method (sizeBC, process)
 import Class (process)
+import Debug.Trace (trace)
 
 
 bytecode :: Types.Class -> BS.ByteString

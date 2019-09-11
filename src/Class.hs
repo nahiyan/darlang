@@ -7,40 +7,28 @@ import Data.List.Split (splitOn)
 
 import Types (Class(..), Model(..))
 import Helper (intToWord16, intToWord32, word16ToWord8)
-import ConstantPool (addClassRef, combineCPAndIndexes)
+import ConstantPool (classRef, addCPItems)
+import Debug.Trace (trace)
 
 
 process :: Class -> Model -> ( Model, [ Word16 ] )
 process class_ model =
     let
-        -- ( constantPoolNew, indexes ) =
-        --     addClassRef
-        --         (Types.className class_)
-        --         (Types.constantPool model)
-
-        -- ( constantPoolNew2, indexes2 ) =
-        --     addClassRef
-        --         "java/lang/Object"
-        --         constantPoolNew
-
         ( constantPoolNew, indexes ) =
-            combineCPAndIndexes
-                [ addClassRef
-                    (Types.className class_)
-                    (Types.constantPool model)
-                , addClassRef
-                    "java/lang/Object"
-                    (Types.constantPool model)
-                ]
-
-        -- indexes3 =
-        --     [ List.head indexes, List.head indexes2 ]
+            addCPItems
+                (Types.constantPool model)
+                (classRef (Types.className class_)
+                    ++ classRef "java/lang/Object"
+                )
 
         indexes2 =
-            [ List.head indexes, indexes !! 2 ]
+            if List.length indexes >= 4 then
+                [ indexes !! 1, indexes !! 3 ]
+            else
+                []
 
         modelNew =
             model
                 { constantPool = constantPoolNew }
     in
-    ( modelNew, [ 1, 2 ] )
+    ( modelNew, indexes2 )

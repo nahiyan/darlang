@@ -7,7 +7,7 @@ import Data.List.Split (splitOn)
 
 import Types (Model(..), Method(..), Instruction)
 import Helper (intToWord16, intToWord32, word16ToWord8)
-import ConstantPool (addCPItem, addFieldRef, addMethodRef, addStringRef)
+import ConstantPool (addCPItems, fieldRef, methodRef, stringRef)
 
 
 accessFlagsBC :: String -> Put
@@ -72,7 +72,7 @@ process'' method model =
             accessFlagsBC $ Types.accessType method
 
         ( constantPoolNew, indexes ) =
-            addCPItem
+            addCPItems
                 (Types.constantPool model)
                 [ ( "utf8", Types.methodName method )
                 , ( "utf8", Types.descriptor method )
@@ -107,7 +107,7 @@ addCodeAttribute instructions method model =
             intToWord32 $ 12 + code_length
 
         ( constantPoolNew, indexes ) =
-            addCPItem
+            addCPItems
                 (Types.constantPool model)
                 [ ( "utf8", "Code" ) ]
 
@@ -183,12 +183,14 @@ getStaticBC contents model =
     if List.length segments == 3 then
         let
             ( constantPoolNew, indexes ) =
-                addFieldRef segments (Types.constantPool model)
+                addCPItems
+                    (Types.constantPool model)
+                    (fieldRef segments)
 
             methodsBCNew =
                 Types.methodsBC model
                     >> putWord8 178
-                    >> putWord16be (List.head indexes)
+                    >> putWord16be (indexes !! 5)
         in
         model
             { constantPool = constantPoolNew
@@ -207,12 +209,14 @@ invokeVirtualBC contents model =
     if List.length segments == 3 then
         let
             ( constantPoolNew, indexes ) =
-                addMethodRef segments (Types.constantPool model)
+                addCPItems
+                    (Types.constantPool model)
+                    (methodRef segments)
 
             methodsBCNew =
                 Types.methodsBC model
                     >> putWord8 182
-                    >> putWord16be (List.head indexes)
+                    >> putWord16be (indexes !! 5)
         in
         model
             { constantPool = constantPoolNew
@@ -226,12 +230,14 @@ ldcBC :: String -> Model -> Model
 ldcBC contents model =
     let
         ( constantPoolNew, indexes ) =
-            addStringRef contents (Types.constantPool model)
+            addCPItems
+                (Types.constantPool model)
+                (stringRef contents)
 
         methodsBCNew =
             Types.methodsBC model
                 >> putWord8 18
-                >> putWord8 (word16ToWord8 (List.head indexes))
+                >> putWord8 (word16ToWord8 (indexes !! 1))
     in
     model
         { constantPool = constantPoolNew
