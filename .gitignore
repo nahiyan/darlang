@@ -3,3 +3,4 @@ java
 dist
 *.class
 Setup.hs
+*.sh

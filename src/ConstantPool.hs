@@ -130,13 +130,6 @@ addCPItems' constantPool items indexes stack =
                     List.take (List.length stack - 2) stack
                 | otherwise = stack
 
-                -- if snd currentItem == "%x" && not (null stack) then
-                --     List.take (List.length stack - 1) stack
-                -- else if snd currentItem == "%x:%x" && List.length stack >= 2 then
-                --     List.take (List.length stack - 2) stack
-                -- else
-                --     stack
-
             ( constantPoolNew, index ) =
                 addCPItem constantPool currentItemNew
 
