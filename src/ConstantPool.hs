@@ -102,7 +102,7 @@ addCPItem constantPool newItems =
     ( constantPoolNew, indexes )
 
 
-addClassRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addClassRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ] )
 addClassRef name constantPool =
     let
         ( constantPoolNew, indexes ) =
@@ -118,7 +118,7 @@ addClassRef name constantPool =
     ( constantPoolNew2, indexes2 ++ indexes )
 
 
-addStringRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addStringRef :: String -> ConstantPool -> ( ConstantPool, [ Word16 ] )
 addStringRef name constantPool =
     let
         ( constantPoolNew, indexes ) =
@@ -134,7 +134,7 @@ addStringRef name constantPool =
     ( constantPoolNew2, indexes2 ++ indexes )
 
 
-addFieldOrMethodRef :: [ String ] -> ConstantPool -> String -> ( ConstantPool, [ Word16 ])
+addFieldOrMethodRef :: [ String ] -> ConstantPool -> String -> ( ConstantPool, [ Word16 ] )
 addFieldOrMethodRef segments constantPool refType =
     if List.length segments == 3 then
         let
@@ -172,17 +172,17 @@ addFieldOrMethodRef segments constantPool refType =
         ( constantPool, [] )
 
 
-addFieldRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addFieldRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ] )
 addFieldRef segments constantPool =
     addFieldOrMethodRef segments constantPool "field"
 
 
-addMethodRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addMethodRef :: [ String ] -> ConstantPool -> ( ConstantPool, [ Word16 ] )
 addMethodRef segments constantPool =
     addFieldOrMethodRef segments constantPool "method"
 
 
-addNameAndType :: String -> String -> ConstantPool -> ( ConstantPool, [ Word16 ])
+addNameAndType :: String -> String -> ConstantPool -> ( ConstantPool, [ Word16 ] )
 addNameAndType name type_ constantPool =
     let
         ( constantPoolNew, indexes ) =
@@ -287,3 +287,14 @@ nameAndTypeBC contents =
             putWord8 12
             putWord16be index1
             putWord16be index2
+
+
+combineCPAndIndexes :: [ ( ConstantPool, [ Word16 ] ) ] -> ( ConstantPool, [ Word16 ] )
+combineCPAndIndexes (x:xs) =
+    List.foldl
+        (\a ->
+            \b ->
+                ( fst a ++ fst b, snd a ++ snd b )
+        )
+        x
+        xs

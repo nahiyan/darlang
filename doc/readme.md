@@ -2,7 +2,7 @@
 
 ```
 
-module Main
+module Main exposing (main)
 
 main _ =
     print "Hello World!"

@@ -36,7 +36,7 @@ bytecode class_ =
 
         -- process class
 
-        processClassModel =
+        ( processedClassModel, [ thisClassIndex, superClassIndex ] ) =
             Class.process
                 class_
                 initModel
@@ -46,7 +46,7 @@ bytecode class_ =
         processedMethodsModel =
             Method.process
                 (Types.methods class_)
-                processClassModel
+                processedClassModel
 
         -- process constant pool
 
@@ -97,10 +97,10 @@ bytecode class_ =
             putWord16be 33
 
         thisClassBC =
-            putWord16be 1
+            putWord16be thisClassIndex
 
         superClassBC =
-            putWord16be 3
+            putWord16be superClassIndex
 
         interfacesCountBC =
             putWord16be 0
