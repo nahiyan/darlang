@@ -1,4 +1,4 @@
-# Functional Programming with JVM
+# Darwin
 
 This project is intended to represent a functional programming language which compiles to JVM bytecode. It's written in Haskell, and includes:
 
@@ -32,9 +32,9 @@ cafe babe 0000 0034 0013 0700 0201 000a
 0000
 ```
 
-The bytecode is nothing more than 0s and 1s (binary). However, the bytecodes above are read with hexadecimal encoding, which leads to characters from 0-9 and A-F (base 16). Hexadecimal encoding is just to make it a bit easier to read and write for us humans, nothing more.
+The bytecode is nothing more than 0s and 1s (binary). However, the bytecodes above are presented with hexadecimal encoding, which leads to characters from 0-9 and A-F (base 16). Hexadecimal encoding is just to make it a bit easier to read and write for us humans, nothing more.
 
-Please beware that JVM is designed to run object oriented code primarily; so even if we want to write a "Hello World" program, there must be a class and a method. Let's learn how to write a simple "Hello World" program in bytecode. This will help us understand a lot about how JVM bytecode is structured.
+Please beware that JVM is designed to run object oriented code primarily; so even if we want to write a "Hello World" program, there must be atleast a class and a method. Let's learn how to write a simple "Hello World" program in bytecode. This will help us understand a lot about how JVM bytecode is structured.
 
 Let's begin with this Java code (just for purposes of understanding):
 
@@ -48,5 +48,4 @@ public class HelloWorld {
 
 ```
 
-To represent this code in bytecode, we need to make a class file. To see the structure of a class file written in bytecode, let's look at [JVM's specifications of one.](https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html)
-
+To represent this code in bytecode, we need to make a class file. To see the structure of a class file written in bytecode, let's look at [JVM's specifications of one](https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html).
