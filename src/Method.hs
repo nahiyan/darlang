@@ -1,20 +1,31 @@
 module Method where
 
-import           Data.Binary.Put (Put, putStringUtf8, putWord16be, putWord32be,
-                                  putWord8)
+import           ConstantPool    ( addCPItems
+                                 , fieldRef
+                                 , methodRef
+                                 , stringRef )
+
+import           Data.Binary.Put ( Put
+                                 , putStringUtf8
+                                 , putWord16be
+                                 , putWord32be
+                                 , putWord8 )
 import           Data.List       as List
-import           Data.List.Split (splitOn)
-import           Data.Word       (Word16)
+import           Data.List.Split ( splitOn )
+import           Data.Word       ( Word16 )
 
-import           ConstantPool    (addCPItems, fieldRef, methodRef, stringRef)
-import           Helper          (intToWord16, intToWord32, word16ToWord8)
-import           Types           (Instruction, Method (..), Model (..))
+import           Helper          ( intToWord16
+                                 , intToWord32
+                                 , word16ToWord8 )
 
+import           Types           ( Instruction
+                                 , Method(..)
+                                 , Model(..) )
 
-accessFlagsBC :: String -> Put
+accessFlagsBC :: String
+              -> Put
 accessFlagsBC accessType =
-    let
-        accessFlags =
+    let accessFlags =
             case accessType of
                 "public static" ->
                     9
@@ -22,142 +33,140 @@ accessFlagsBC accessType =
                 _ ->
                     2
     in
-    putWord16be accessFlags
-
+        putWord16be accessFlags
 
 sizeBC :: Put
 sizeBC =
     putWord16be 0
 
-
-process :: [ Method ] -> Model -> Model
+process :: [Method]
+        -> Model
+        -> Model
 process methods model =
-    let
-        modelNew =
-            model
-                { methodsBC =
-                    putWord16be
-                        $ intToWord16 $ List.length methods
-                }
+    let modelNew =
+            model { methodsBC =
+                        putWord16be $ intToWord16 $
+                        List.length methods
+                  }
     in
-    process' methods modelNew
-
+        process' methods modelNew
 
 -- Loop through the methods
-
-process' :: [ Method ] -> Model -> Model
+process' :: [Method]
+         -> Model
+         -> Model
 process' methods model =
-    if null methods then
-        model
-    else
-        let
-            currentMethod =
-                List.head methods :: Method
+    if null methods
+    then model
+    else let currentMethod =
+                 List.head methods :: Method
 
-            methodsNew =
-                List.tail methods :: [ Method ]
+             methodsNew    =
+                 List.tail methods :: [Method]
 
-            modelNew =
-                process'' currentMethod model
-
-        in
-        process' methodsNew modelNew
-
+             modelNew      =
+                 process'' currentMethod model
+         in
+             process' methodsNew modelNew
 
 -- Process each method
-
-process'' :: Method -> Model -> Model
+process'' :: Method
+          -> Model
+          -> Model
 process'' method model =
-    let
-        accessFlags =
-            accessFlagsBC $ Types.accessType method
+    let accessFlags                  =
+            accessFlagsBC $
+            Types.accessType method
 
         ( constantPoolNew, indexes ) =
-            addCPItems
-                (Types.constantPool model)
-                [ ( "utf8", Types.methodName method )
-                , ( "utf8", Types.descriptor method )
-                ]
+            addCPItems (Types.constantPool model)
+                       [ ( "utf8"
+                             , Types.methodName method
+                             )
+                       , ( "utf8"
+                             , Types.descriptor method
+                             )
+                       ]
 
-        methodsBCNew =
+        methodsBCNew                 =
             Types.methodsBC model
-                >> accessFlags
-                >> putWord16be (List.head indexes)
-                >> putWord16be (indexes !! 1)
-                >> putWord16be 1
+            >> accessFlags
+            >> putWord16be (List.head indexes)
+            >> putWord16be (indexes !! 1)
+            >> putWord16be 1
 
-        modelNew =
-            model
-                { methodsBC = methodsBCNew
-                , constantPool = constantPoolNew
-                }
+        modelNew                     =
+            model { methodsBC    =
+                        methodsBCNew
+                  , constantPool =
+                        constantPoolNew
+                  }
     in
-    addCodeAttribute
-        (Types.code method)
-        method
-        modelNew
+        addCodeAttribute (Types.code method)
+                         method
+                         modelNew
 
-
-addCodeAttribute :: [ Instruction ] -> Method -> Model -> Model
+addCodeAttribute :: [Instruction]
+                 -> Method
+                 -> Model
+                 -> Model
 addCodeAttribute instructions method model =
-    let
-        code_length =
-            List.sum (List.map instructionSize instructions)
+    let code_length                  =
+            List.sum (List.map instructionSize
+                               instructions)
 
-        attribute_size =
+        attribute_size               =
             intToWord32 $ 12 + code_length
 
         ( constantPoolNew, indexes ) =
-            addCPItems
-                (Types.constantPool model)
-                [ ( "utf8", "Code" ) ]
+            addCPItems (Types.constantPool model)
+                       [ ( "utf8", "Code" ) ]
 
-        modelNew =
-            model
-                { constantPool = constantPoolNew
-                , methodsBC =
-                    Types.methodsBC model
+        modelNew                     =
+            model { constantPool =
+                        constantPoolNew
+                  , methodsBC    =
+                        Types.methodsBC model
                         >> putWord16be (List.head indexes)
                         >> putWord32be attribute_size
                         >> putWord16be (Types.maxStackSize method)
                         >> putWord16be (Types.maxLocalVarSize method)
                         >> putWord32be (intToWord32 code_length)
-                }
+                  }
 
-        modelNew2 =
+        modelNew2                    =
             addInstructions instructions modelNew
     in
-    modelNew2
-        { methodsBC =
-            Types.methodsBC modelNew2
-                >> putWord16be 0
-                >> putWord16be 0
-        }
-
+        modelNew2 { methodsBC =
+                        Types.methodsBC modelNew2
+                        >> putWord16be 0
+                        >> putWord16be 0
+                  }
 
 -- recurse through the instructions
-
-addInstructions :: [ Instruction ] -> Model -> Model
+addInstructions :: [Instruction]
+                -> Model
+                -> Model
 addInstructions instructions model =
-    if null instructions then
-        model
-    else
-        let
-            currentInstruction =
-                List.head instructions
+    if null instructions
+    then model
+    else let currentInstruction =
+                 List.head instructions
 
-            instructionsNew =
-                List.tail instructions
+             instructionsNew    =
+                 List.tail instructions
 
-            modelNew =
-                addInstructions' currentInstruction model
+             modelNew           =
+                 addInstructions' currentInstruction
+                                  model
+         in
+             addInstructions instructionsNew
+                             modelNew
 
-        in
-        addInstructions instructionsNew modelNew
-
-
-addInstructions' :: Instruction -> Model -> Model
-addInstructions' (type_, contents) model =
+addInstructions' :: Instruction
+                 -> Model
+                 -> Model
+addInstructions' ( type_, contents ) model =
     case type_ of
         "getstatic" ->
             getStaticBC contents model
@@ -174,91 +183,88 @@ addInstructions' (type_, contents) model =
         _ ->
             model
 
-
-getStaticBC :: String -> Model -> Model
+getStaticBC :: String
+            -> Model
+            -> Model
 getStaticBC contents model =
-    let
-        segments =
+    let segments =
             splitOn ":" contents
     in
-    if List.length segments == 3 then
-        let
-            ( constantPoolNew, indexes ) =
-                addCPItems
-                    (Types.constantPool model)
-                    (fieldRef segments)
+        if List.length segments == 3
+        then let ( constantPoolNew, indexes ) =
+                     addCPItems (Types.constantPool model)
+                                (fieldRef segments)
 
-            methodsBCNew =
-                Types.methodsBC model
-                    >> putWord8 178
-                    >> putWord16be (indexes !! 5)
-        in
-        model
-            { constantPool = constantPoolNew
-            , methodsBC = methodsBCNew
-            }
-    else
-        model
+                 methodsBCNew                 =
+                     Types.methodsBC model
+                     >> putWord8 178
+                     >> putWord16be (indexes !! 5)
+             in
+                 model { constantPool =
+                             constantPoolNew
+                       , methodsBC    =
+                             methodsBCNew
+                       }
+        else model
 
-
-invokeVirtualBC :: String -> Model -> Model
+invokeVirtualBC :: String
+                -> Model
+                -> Model
 invokeVirtualBC contents model =
-    let
-        segments =
+    let segments =
             splitOn ":" contents
     in
-    if List.length segments == 3 then
-        let
-            ( constantPoolNew, indexes ) =
-                addCPItems
-                    (Types.constantPool model)
-                    (methodRef segments)
+        if List.length segments == 3
+        then let ( constantPoolNew, indexes ) =
+                     addCPItems (Types.constantPool model)
+                                (methodRef segments)
 
-            methodsBCNew =
-                Types.methodsBC model
-                    >> putWord8 182
-                    >> putWord16be (indexes !! 5)
-        in
-        model
-            { constantPool = constantPoolNew
-            , methodsBC = methodsBCNew
-            }
-    else
-        model
+                 methodsBCNew                 =
+                     Types.methodsBC model
+                     >> putWord8 182
+                     >> putWord16be (indexes !! 5)
+             in
+                 model { constantPool =
+                             constantPoolNew
+                       , methodsBC    =
+                             methodsBCNew
+                       }
+        else model
 
-
-ldcBC :: String -> Model -> Model
+ldcBC :: String
+      -> Model
+      -> Model
 ldcBC contents model =
-    let
-        ( constantPoolNew, indexes ) =
-            addCPItems
-                (Types.constantPool model)
-                (stringRef contents)
+    let ( constantPoolNew, indexes ) =
+            addCPItems (Types.constantPool model)
+                       (stringRef contents)
 
-        methodsBCNew =
+        methodsBCNew                 =
             Types.methodsBC model
-                >> putWord8 18
-                >> putWord8 (word16ToWord8 (indexes !! 1))
+            >> putWord8 18
+            >> putWord8 (word16ToWord8 (indexes
+                                        !! 1))
     in
-    model
-        { constantPool = constantPoolNew
-        , methodsBC = methodsBCNew
-        }
+        model { constantPool =
+                    constantPoolNew
+              , methodsBC    =
+                    methodsBCNew
+              }
 
-
-returnBC :: String -> Model -> Model
+returnBC :: String
+         -> Model
+         -> Model
 returnBC contents model =
-    let
-        methodsBCNew =
+    let methodsBCNew =
             Types.methodsBC model
-                >> putWord8 177
+            >> putWord8 177
     in
-    model
-        { methodsBC = methodsBCNew
-        }
+        model { methodsBC =
+                    methodsBCNew
+              }
 
-
-instructionSize :: Instruction -> Int
+instructionSize :: Instruction
+                -> Int
 instructionSize ( name, contents ) =
     case name of
         "getstatic" ->
