@@ -1,14 +1,15 @@
 module ConstantPool where
 
-import Data.Binary.Put (Put, runPut, putWord8, putWord16be, putStringUtf8)
-import Data.Word (Word16)
-import Data.List as List
-import Data.List.Split (splitOn)
-import Control.Monad (when)
-import Debug.Trace (trace)
+import           Control.Monad   (when)
+import           Data.Binary.Put (Put, putStringUtf8, putWord16be, putWord8,
+                                  runPut)
+import           Data.List       as List
+import           Data.List.Split (splitOn)
+import           Data.Word       (Word16)
+import           Debug.Trace     (trace)
 
-import Types
-import Helper (intToWord16)
+import           Helper          (intToWord16)
+import           Types
 
 
 sizeBC :: Word16 -> Put

@@ -1,17 +1,18 @@
 module ClassFile where
 
-import Data.ByteString.Char8 as BSC
-import Data.ByteString.Lazy as BS
-import Data.Binary.Put (Put, runPut, putWord8, putWord16be, putStringUtf8)
-import Data.Word (Word16)
-import Data.List as List
+import           Data.Binary.Put       (Put, putStringUtf8, putWord16be,
+                                        putWord8, runPut)
+import           Data.ByteString.Char8 as BSC
+import           Data.ByteString.Lazy  as BS
+import           Data.List             as List
+import           Data.Word             (Word16)
 
-import Helper (intToWord16)
-import ConstantPool as CP
-import Types (Model(..), Class(..), Method(..))
-import Method (sizeBC, process)
-import Class (process)
-import Debug.Trace (trace)
+import           Class                 (process)
+import           ConstantPool          as CP
+import           Debug.Trace           (trace)
+import           Helper                (intToWord16)
+import           Method                (process, sizeBC)
+import           Types                 (Class (..), Method (..), Model (..))
 
 
 bytecode :: Types.Class -> BS.ByteString

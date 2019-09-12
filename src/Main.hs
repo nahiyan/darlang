@@ -1,9 +1,9 @@
 module Main where
 
-import Data.ByteString.Lazy as BS
-import ClassFile (writeClassFile)
+import           ClassFile            (writeClassFile)
+import           Data.ByteString.Lazy as BS
 
-import Types (Class(..), Method(..))
+import           Types                (Class (..), Method (..))
 
 main :: IO ()
 main =

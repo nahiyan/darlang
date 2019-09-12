@@ -1,14 +1,15 @@
 module Class where
 
-import Data.Binary.Put (Put, putWord8, putWord16be, putStringUtf8, putWord32be)
-import Data.Word (Word16)
-import Data.List as List
-import Data.List.Split (splitOn)
+import           Data.Binary.Put (Put, putStringUtf8, putWord16be, putWord32be,
+                                  putWord8)
+import           Data.List       as List
+import           Data.List.Split (splitOn)
+import           Data.Word       (Word16)
 
-import Types (Class(..), Model(..))
-import Helper (intToWord16, intToWord32, word16ToWord8)
-import ConstantPool (classRef, addCPItems)
-import Debug.Trace (trace)
+import           ConstantPool    (addCPItems, classRef)
+import           Debug.Trace     (trace)
+import           Helper          (intToWord16, intToWord32, word16ToWord8)
+import           Types           (Class (..), Model (..))
 
 
 process :: Class -> Model -> ( Model, [ Word16 ] )

@@ -1,13 +1,14 @@
 module Method where
 
-import Data.Binary.Put (Put, putWord8, putWord16be, putStringUtf8, putWord32be)
-import Data.Word (Word16)
-import Data.List as List
-import Data.List.Split (splitOn)
+import           Data.Binary.Put (Put, putStringUtf8, putWord16be, putWord32be,
+                                  putWord8)
+import           Data.List       as List
+import           Data.List.Split (splitOn)
+import           Data.Word       (Word16)
 
-import Types (Model(..), Method(..), Instruction)
-import Helper (intToWord16, intToWord32, word16ToWord8)
-import ConstantPool (addCPItems, fieldRef, methodRef, stringRef)
+import           ConstantPool    (addCPItems, fieldRef, methodRef, stringRef)
+import           Helper          (intToWord16, intToWord32, word16ToWord8)
+import           Types           (Instruction, Method (..), Model (..))
 
 
 accessFlagsBC :: String -> Put
@@ -177,7 +178,7 @@ addInstructions' (type_, contents) model =
 getStaticBC :: String -> Model -> Model
 getStaticBC contents model =
     let
-        segments = 
+        segments =
             splitOn ":" contents
     in
     if List.length segments == 3 then
@@ -203,7 +204,7 @@ getStaticBC contents model =
 invokeVirtualBC :: String -> Model -> Model
 invokeVirtualBC contents model =
     let
-        segments = 
+        segments =
             splitOn ":" contents
     in
     if List.length segments == 3 then
