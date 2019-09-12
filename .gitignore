@@ -4,3 +4,4 @@ dist
 *.class
 Setup.hs
 *.sh
+floskell.json
