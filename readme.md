@@ -1,4 +1,4 @@
-# Darwin
+# Darlang
 
 This project is intended to represent a functional programming language which compiles to JVM bytecode. It's written in Haskell, and includes:
 
